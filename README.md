@@ -8,8 +8,12 @@ Usage
 
 import levelog first
 
-`import "github.com/vuleetu/levelog"`
+```go
+import "github.com/vuleetu/levelog"
+```
 
 log anything you want
 
-`levelog.Info(1, "hello", true)`
+```go
+levelog.Info(1, "hello", true)
+```
