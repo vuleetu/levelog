@@ -32,6 +32,10 @@ const (
 
 var _log *logger = New()
 
+func Logger() *log.Logger {
+    return _log._log
+}
+
 func SetLogLevel(level string) {
     _log.SetLogLevel(level)
 }
