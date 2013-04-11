@@ -16,4 +16,6 @@ log anything you want
 
 ```go
 levelog.Info(1, "hello", true)
+levelog.Debug("debug info")
+levelog.Error("error info", true)
 ```
