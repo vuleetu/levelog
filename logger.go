@@ -7,6 +7,15 @@ import (
     "log"
 )
 
+const (
+    Ldate = log.Ldate
+    Llongfile = log.Llongfile
+    Lmicroseconds = log.Lmicroseconds
+    Lshortfile = log.Lshortfile
+    LstdFlags = log.LstdFlags
+    Ltime = log.Ltime
+)
+
 type (
     LogLevel byte
     LogType byte
@@ -38,6 +47,14 @@ func Logger() *log.Logger {
 
 func SetLogLevel(level string) {
     _log.SetLogLevel(level)
+}
+
+func SetWriter(out io.Writer) {
+    _log._log = log.New(out, _log._log.Prefix(), _log._log.Flags())
+}
+
+func SetFlags(flags int) {
+    _log._log.SetFlags(flags)
 }
 
 func Info(v ...interface{}) {
@@ -141,5 +158,5 @@ func New() *logger {
 }
 
 func Newlogger(w io.Writer, prefix string) *logger {
-    return &logger{log.New(w, prefix, log.LstdFlags), LOG_LEVEL_ALL}
+    return &logger{log.New(w, prefix, LstdFlags), LOG_LEVEL_ALL}
 }
