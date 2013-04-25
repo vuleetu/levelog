@@ -5,6 +5,7 @@ import (
     "io"
     "os"
     "log"
+    "fmt"
 )
 
 const (
@@ -47,6 +48,9 @@ func Logger() *log.Logger {
 
 func SetLogLevel(level string) {
     _log.SetLogLevel(level)
+}
+func GetLogLevel() LogLevel {
+    return _log.level
 }
 
 func SetWriter(out io.Writer) {
@@ -97,7 +101,8 @@ func (l *logger) log(t LogType, v ...interface{}) {
     copy(v1[1:], v)
     v1[len(v)+1] = "\033[0m"
 
-    l._log.Println(v1...)
+    s := fmt.Sprintln(v1...)
+    l._log.Output(4, s)
 }
 
 func (l *logger) Fatal(v ...interface{}) {
