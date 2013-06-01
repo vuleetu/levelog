@@ -6,6 +6,8 @@ import (
     "os"
     "log"
     "fmt"
+    "crypto/rand"
+    "encoding/hex"
 )
 
 const (
@@ -84,6 +86,34 @@ func Fatal(v ...interface{}) {
 type logger struct {
     _log *log.Logger
     level LogLevel
+    tracelogs map[string]*HookLogger
+}
+
+type HookLogger struct{
+    level LogLevel
+    _log *log.Logger
+    WriteFlusher
+}
+
+func NewHookLog(wf WriteFlusher, level LogLevel) *HookLogger {
+    return &HookLogger{level, log.New(wf, _log._log.Prefix(), _log._log.Flags()), wf}
+}
+
+type WriteFlusher interface {
+    Write([]byte) (int, error)
+    Flush()
+}
+
+func NewTraceLog(wf WriteFlusher) string {
+    return NewTraceLogHookLog(NewHookLog(wf, _log.level))
+}
+
+func NewTraceLogHookLog(hl *HookLogger) string {
+    buf := make([]byte, 20)
+    io.ReadFull(rand.Reader, buf)
+    name := hex.EncodeToString(buf)
+    _log.tracelogs[name] = hl
+    return name
 }
 
 func (l *logger) SetLogLevel(level string) {
@@ -95,14 +125,37 @@ func (l *logger) log(t LogType, v ...interface{}) {
         return
     }
 
+    s := l.convert2string(t, v...)
+    l._log.Output(4, s)
+
+    var invalidTraceLogs []string
+    for name, hk := range l.tracelogs {
+        if hk.level | LogLevel(t) != hk.level {
+            continue
+        }
+
+        err := hk._log.Output(4, s)
+        if err != nil {
+            l._log.Output(4, l.convert2string(LOG_ERROR, "Error when write log to hook logs:", err))
+            invalidTraceLogs = append(invalidTraceLogs, name)
+            continue
+        }
+        hk.Flush()
+    }
+
+    for _, name := range invalidTraceLogs {
+        delete(l.tracelogs, name)
+    }
+}
+
+func (*logger) convert2string(t LogType, v ...interface{}) string {
     v1 := make([]interface{}, len(v)+2)
     logStr, logColor := LogTypeToString(t)
     v1[0] = "\033" + logColor + "m[" + logStr + "]"
     copy(v1[1:], v)
     v1[len(v)+1] = "\033[0m"
-
     s := fmt.Sprintln(v1...)
-    l._log.Output(4, s)
+    return s
 }
 
 func (l *logger) Fatal(v ...interface{}) {
@@ -163,5 +216,5 @@ func New() *logger {
 }
 
 func Newlogger(w io.Writer, prefix string) *logger {
-    return &logger{log.New(w, prefix, LstdFlags), LOG_LEVEL_ALL}
+    return &logger{log.New(w, prefix, LstdFlags), LOG_LEVEL_ALL, map[string]*HookLogger{}}
 }
