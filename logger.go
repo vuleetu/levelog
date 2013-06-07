@@ -56,7 +56,7 @@ func GetLogLevel() LogLevel {
 }
 
 func SetWriter(out io.Writer) {
-    _log._log = log.New(out, _log._log.Prefix(), _log._log.Flags())
+    _log.SetWriter(out)
 }
 
 func SetFlags(flags int) {
@@ -177,6 +177,10 @@ func (l *logger) Debug(v ...interface{}) {
 
 func (l *logger) Info(v ...interface{}) {
     l.log(LOG_INFO, v...)
+}
+
+func (l *logger) SetWriter(w io.Writer) {
+    l._log = log.New(w, l._log.Prefix(), l._log.Flags())
 }
 
 func StringToLogLevel(level string) LogLevel {
