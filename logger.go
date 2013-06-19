@@ -21,25 +21,26 @@ const (
 
 type (
     LogLevel byte
-    LogType byte
+    logType byte
 )
 
 const (
-    LOG_FATAL = LogType(0x1)
-    LOG_ERROR = LogType(0x2)
-    LOG_WARN = LogType(0x4)
-    LOG_DEBUG = LogType(0x8)
-    LOG_INFO = LogType(0x10)
+    log_none = logType(0x0)
+    log_fatal = logType(0x1)
+    log_error = logType(0x2)
+    log_warn = logType(0x4)
+    log_info = logType(0x8)
+    log_debug = logType(0x10)
 )
 
 const (
-    LOG_LEVEL_NONE = LogLevel(0x0)
-    LOG_LEVEL_FATAL = LOG_LEVEL_NONE | LogLevel(LOG_FATAL)
-    LOG_LEVEL_ERROR = LOG_LEVEL_FATAL | LogLevel(LOG_ERROR)
-    LOG_LEVEL_WARN = LOG_LEVEL_ERROR | LogLevel(LOG_WARN)
-    LOG_LEVEL_DEBUG = LOG_LEVEL_WARN | LogLevel(LOG_DEBUG)
-    LOG_LEVEL_INFO = LOG_LEVEL_DEBUG | LogLevel(LOG_INFO)
-    LOG_LEVEL_ALL = LOG_LEVEL_INFO
+    LOG_LEVEL_NONE = LogLevel(log_none)
+    LOG_LEVEL_FATAL = LOG_LEVEL_NONE | LogLevel(log_fatal)
+    LOG_LEVEL_ERROR = LOG_LEVEL_FATAL | LogLevel(log_error)
+    LOG_LEVEL_WARN = LOG_LEVEL_ERROR | LogLevel(log_warn)
+    LOG_LEVEL_INFO = LOG_LEVEL_WARN | LogLevel(log_info)
+    LOG_LEVEL_DEBUG = LOG_LEVEL_INFO | LogLevel(log_debug)
+    LOG_LEVEL_ALL = LOG_LEVEL_DEBUG
 )
 
 var _log *logger = New()
@@ -52,7 +53,7 @@ func SetLogLevel(level string) {
     _log.SetLogLevel(level)
 }
 func GetLogLevel() LogLevel {
-    return _log.level
+    return _log.GetLogLevel()
 }
 
 func SetWriter(out io.Writer) {
@@ -60,7 +61,7 @@ func SetWriter(out io.Writer) {
 }
 
 func SetFlags(flags int) {
-    _log._log.SetFlags(flags)
+    _log.SetFlags(flags)
 }
 
 func Info(v ...interface{}) {
@@ -84,49 +85,59 @@ func Fatal(v ...interface{}) {
 }
 
 type logger struct {
+    *levelLogger
+    depth int
+    tracelogs map[string]*levelLogger
+}
+
+type levelLogger struct {
     _log *log.Logger
     level LogLevel
-    tracelogs map[string]*HookLogger
 }
 
-type HookLogger struct{
-    level LogLevel
-    _log *log.Logger
-    WriteFlusher
+func AddTraceLog(w io.Writer, level string) string {
+    return _log.AddTraceLog(w, level)
 }
 
-func NewHookLog(wf WriteFlusher, level LogLevel) *HookLogger {
-    return &HookLogger{level, log.New(wf, _log._log.Prefix(), _log._log.Flags()), wf}
+func DelTraceLog(id string) {
+    _log.DelTraceLog(id)
 }
 
-type WriteFlusher interface {
-    Write([]byte) (int, error)
-    Flush()
-}
-
-func NewTraceLog(wf WriteFlusher) string {
-    return NewTraceLogHookLog(NewHookLog(wf, _log.level))
-}
-
-func NewTraceLogHookLog(hl *HookLogger) string {
+func (l *logger) AddTraceLog(w io.Writer, level string) string {
     buf := make([]byte, 20)
     io.ReadFull(rand.Reader, buf)
     name := hex.EncodeToString(buf)
-    _log.tracelogs[name] = hl
+    _log.tracelogs[name] = &levelLogger{log.New(w, l._log.Prefix(), l._log.Flags()), stringToLogLevel(level)}
     return name
 }
 
-func (l *logger) SetLogLevel(level string) {
-    l.level = StringToLogLevel(level)
+func (l *logger) DelTraceLog(id string) {
+    delete(l.tracelogs, id)
 }
 
-func (l *logger) log(t LogType, v ...interface{}) {
+func (l *logger) SetLogLevel(level string) {
+    l.level = stringToLogLevel(level)
+}
+
+func (l *logger) GetLogLevel() LogLevel {
+    return l.level
+}
+
+func (l *logger) SetFlags(flags int) {
+    l._log.SetFlags(flags)
+}
+
+func (l *logger) SetDepth(depth int) {
+    l.depth = depth
+}
+
+func (l *logger) log(t logType, v ...interface{}) {
     if l.level | LogLevel(t) != l.level {
         return
     }
 
     s := l.convert2string(t, v...)
-    l._log.Output(4, s)
+    l._log.Output(l.depth, s)
 
     var invalidTraceLogs []string
     for name, hk := range l.tracelogs {
@@ -134,13 +145,12 @@ func (l *logger) log(t LogType, v ...interface{}) {
             continue
         }
 
-        err := hk._log.Output(4, s)
+        err := hk._log.Output(l.depth, s)
         if err != nil {
-            l._log.Output(4, l.convert2string(LOG_ERROR, "Error when write log to hook logs:", err))
+            l._log.Output(l.depth, l.convert2string(log_error, "Error when write log to hook logs:", err))
             invalidTraceLogs = append(invalidTraceLogs, name)
             continue
         }
-        hk.Flush()
     }
 
     for _, name := range invalidTraceLogs {
@@ -148,9 +158,9 @@ func (l *logger) log(t LogType, v ...interface{}) {
     }
 }
 
-func (*logger) convert2string(t LogType, v ...interface{}) string {
+func (*logger) convert2string(t logType, v ...interface{}) string {
     v1 := make([]interface{}, len(v)+2)
-    logStr, logColor := LogTypeToString(t)
+    logStr, logColor := logTypeToString(t)
     v1[0] = "\033" + logColor + "m[" + logStr + "]"
     copy(v1[1:], v)
     v1[len(v)+1] = "\033[0m"
@@ -159,31 +169,31 @@ func (*logger) convert2string(t LogType, v ...interface{}) string {
 }
 
 func (l *logger) Fatal(v ...interface{}) {
-    l.log(LOG_FATAL, v...)
+    l.log(log_fatal, v...)
     os.Exit(-1)
 }
 
 func (l *logger) Error(v ...interface{}) {
-    l.log(LOG_ERROR, v...)
+    l.log(log_error, v...)
 }
 
 func (l *logger) Warn(v ...interface{}) {
-    l.log(LOG_WARN, v...)
+    l.log(log_warn, v...)
 }
 
 func (l *logger) Debug(v ...interface{}) {
-    l.log(LOG_DEBUG, v...)
+    l.log(log_debug, v...)
 }
 
 func (l *logger) Info(v ...interface{}) {
-    l.log(LOG_INFO, v...)
+    l.log(log_info, v...)
 }
 
 func (l *logger) SetWriter(w io.Writer) {
     l._log = log.New(w, l._log.Prefix(), l._log.Flags())
 }
 
-func StringToLogLevel(level string) LogLevel {
+func stringToLogLevel(level string) LogLevel {
     switch level {
         case "fatal":
             return LOG_LEVEL_FATAL
@@ -199,17 +209,17 @@ func StringToLogLevel(level string) LogLevel {
     return LOG_LEVEL_ALL
 }
 
-func LogTypeToString(t LogType) (string, string) {
+func logTypeToString(t logType) (string, string) {
     switch t {
-        case LOG_FATAL:
+        case log_fatal:
             return "fatal", "[0;31"
-        case LOG_ERROR:
+        case log_error:
             return "error", "[0;31"
-        case LOG_WARN:
+        case log_warn:
             return "warning", "[0;33"
-        case LOG_DEBUG:
+        case log_debug:
             return "debug", "[0;36"
-        case LOG_INFO:
+        case log_info:
             return "info", "[0;37"
     }
     return "unknown", "[0;37"
@@ -220,5 +230,5 @@ func New() *logger {
 }
 
 func Newlogger(w io.Writer, prefix string) *logger {
-    return &logger{log.New(w, prefix, LstdFlags), LOG_LEVEL_ALL, map[string]*HookLogger{}}
+    return &logger{&levelLogger{log.New(w, prefix, LstdFlags), LOG_LEVEL_ALL}, 4, map[string]*levelLogger{}}
 }
