@@ -43,7 +43,11 @@ const (
     LOG_LEVEL_ALL = LOG_LEVEL_DEBUG
 )
 
-var _log *logger = New()
+var _log *LevelLogger = New()
+
+func LevLogger() *LevelLogger {
+    return _log
+}
 
 func Logger() *log.Logger {
     return _log._log
@@ -84,7 +88,7 @@ func Fatal(v ...interface{}) {
     _log.Fatal(v...)
 }
 
-type logger struct {
+type LevelLogger struct {
     *levelLogger
     depth int
     tracelogs map[string]*levelLogger
@@ -103,7 +107,7 @@ func DelTraceLog(id string) {
     _log.DelTraceLog(id)
 }
 
-func (l *logger) AddTraceLog(w io.Writer, level string) string {
+func (l *LevelLogger) AddTraceLog(w io.Writer, level string) string {
     buf := make([]byte, 20)
     io.ReadFull(rand.Reader, buf)
     name := hex.EncodeToString(buf)
@@ -111,27 +115,27 @@ func (l *logger) AddTraceLog(w io.Writer, level string) string {
     return name
 }
 
-func (l *logger) DelTraceLog(id string) {
+func (l *LevelLogger) DelTraceLog(id string) {
     delete(l.tracelogs, id)
 }
 
-func (l *logger) SetLogLevel(level string) {
+func (l *LevelLogger) SetLogLevel(level string) {
     l.level = stringToLogLevel(level)
 }
 
-func (l *logger) GetLogLevel() LogLevel {
+func (l *LevelLogger) GetLogLevel() LogLevel {
     return l.level
 }
 
-func (l *logger) SetFlags(flags int) {
+func (l *LevelLogger) SetFlags(flags int) {
     l._log.SetFlags(flags)
 }
 
-func (l *logger) SetDepth(depth int) {
+func (l *LevelLogger) SetDepth(depth int) {
     l.depth = depth
 }
 
-func (l *logger) log(t logType, v ...interface{}) {
+func (l *LevelLogger) log(t logType, v ...interface{}) {
     if l.level | LogLevel(t) != l.level {
         return
     }
@@ -158,7 +162,7 @@ func (l *logger) log(t logType, v ...interface{}) {
     }
 }
 
-func (*logger) convert2string(t logType, v ...interface{}) string {
+func (*LevelLogger) convert2string(t logType, v ...interface{}) string {
     v1 := make([]interface{}, len(v)+2)
     logStr, logColor := logTypeToString(t)
     v1[0] = "\033" + logColor + "m[" + logStr + "]"
@@ -168,28 +172,28 @@ func (*logger) convert2string(t logType, v ...interface{}) string {
     return s
 }
 
-func (l *logger) Fatal(v ...interface{}) {
+func (l *LevelLogger) Fatal(v ...interface{}) {
     l.log(log_fatal, v...)
     os.Exit(-1)
 }
 
-func (l *logger) Error(v ...interface{}) {
+func (l *LevelLogger) Error(v ...interface{}) {
     l.log(log_error, v...)
 }
 
-func (l *logger) Warn(v ...interface{}) {
+func (l *LevelLogger) Warn(v ...interface{}) {
     l.log(log_warn, v...)
 }
 
-func (l *logger) Debug(v ...interface{}) {
+func (l *LevelLogger) Debug(v ...interface{}) {
     l.log(log_debug, v...)
 }
 
-func (l *logger) Info(v ...interface{}) {
+func (l *LevelLogger) Info(v ...interface{}) {
     l.log(log_info, v...)
 }
 
-func (l *logger) SetWriter(w io.Writer) {
+func (l *LevelLogger) SetWriter(w io.Writer) {
     l._log = log.New(w, l._log.Prefix(), l._log.Flags())
 }
 
@@ -225,10 +229,10 @@ func logTypeToString(t logType) (string, string) {
     return "unknown", "[0;37"
 }
 
-func New() *logger {
+func New() *LevelLogger {
     return Newlogger(os.Stdout, "")
 }
 
-func Newlogger(w io.Writer, prefix string) *logger {
-    return &logger{&levelLogger{log.New(w, prefix, LstdFlags), LOG_LEVEL_ALL}, 4, map[string]*levelLogger{}}
+func Newlogger(w io.Writer, prefix string) *LevelLogger {
+    return &LevelLogger{&levelLogger{log.New(w, prefix, LstdFlags), LOG_LEVEL_ALL}, 4, map[string]*levelLogger{}}
 }
